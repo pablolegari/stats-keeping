@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from collections import Counter
 
 # Function to load data
 @st.cache_data
@@ -10,7 +11,91 @@ def load_data():
 def format_float(val):
     if isinstance(val, float):
         return f"{val:.1f}"
-    return val  # Non-floats are returned as-is
+    return val
+
+
+def calculate_average_stats(data, player_name):
+    # Data for actions the player was directly involved in
+    player_actions = data[data['Player Involved'] == player_name]
+
+    # Data for plays where the player was on the field
+    player_on_field = data[data['Player Positions'].str.contains(player_name, na=False)]
+
+    # Separate the data based on 'Offense' or 'Defense'
+    player_on_field_offense = player_on_field[player_on_field['Offense/Defense'] == 'Offense']
+    player_on_field_defense = player_on_field[player_on_field['Offense/Defense'] == 'Defense']
+
+    # Number of games played is the number of unique game weeks the player participated in
+    games_played = player_on_field['Week'].nunique()
+
+    # Total and average calculations
+    total_rushing_yards = player_actions[(player_actions['Action'] == 'Run') & (player_actions['Offense/Defense'] == 'Offense')]['Yards'].sum()
+    avg_rushing_yards_per_game = total_rushing_yards / games_played if games_played else 0
+
+    total_receiving_yards = player_actions[(player_actions['Action'] == 'Pass') & (player_actions['Offense/Defense'] == 'Offense')]['Yards'].sum()
+    avg_receiving_yards_per_game = total_receiving_yards / games_played if games_played else 0
+
+    total_rushing_tds = player_actions[(player_actions['Touchdown Type'] == 'Rushing Touchdown') & (player_actions['Offense/Defense'] == 'Offense')].shape[0]
+    avg_rushing_tds_per_game = total_rushing_tds / games_played if games_played else 0
+
+    total_receiving_tds = player_actions[(player_actions['Touchdown Type'] == 'Receiving Touchdown') & (player_actions['Offense/Defense'] == 'Offense')].shape[0]
+    avg_receiving_tds_per_game = total_receiving_tds / games_played if games_played else 0
+
+    sacks = player_actions[(player_actions['Action'] == 'Sack') & (player_actions['Offense/Defense'] == 'Defense')].shape[0]
+    avg_sacks = sacks / games_played if games_played else 0
+
+    flags_pulled = player_actions[(player_actions['Action'] == 'Flag Pull') & (player_actions['Offense/Defense'] == 'Defense')].shape[0] + sacks
+    avg_flags_pulled_per_game = flags_pulled / games_played if games_played else 0
+
+    avg_offensive_plays = player_on_field_offense.shape[0] / games_played if games_played else 0
+    avg_defensive_plays = player_on_field_defense.shape[0] / games_played if games_played else 0
+
+    # Extract positions the player has played
+    all_positions = []
+    for positions in player_on_field['Player Positions']:
+        if pd.notnull(positions):
+            position_entries = positions.split(', ')
+            for entry in position_entries:
+                name, position = entry.split(' as ')
+                if name.strip() == player_name:
+                    all_positions.append(position.strip())
+
+    # Offensive and defensive positions
+    offensive_positions_set = set(['Quarterback', 'Wide Receiver', 'Running Back', 'Tight End', 'Center'])
+    defensive_positions_set = set(['Pass Rusher', 'Corner Back', 'Safety'])
+
+    player_offensive_positions = [pos for pos in all_positions if pos in offensive_positions_set]
+    player_defensive_positions = [pos for pos in all_positions if pos in defensive_positions_set]
+
+    most_common_offensive_position = Counter(player_offensive_positions).most_common(1)[0][0] if player_offensive_positions else 'N/A'
+    most_common_defensive_position = Counter(player_defensive_positions).most_common(1)[0][0] if player_defensive_positions else 'N/A'
+
+    # Calculating average passing yards specifically for when the player is a quarterback
+    qb_plays = data[data['Player Positions'].apply(lambda x: player_name + ' as Quarterback' in x if x is not None else False)]
+    completed_passes = qb_plays[(qb_plays['Offense/Defense'] == 'Offense') & (qb_plays['Pass Outcome'] == 'Complete')]
+    total_passing_yards = completed_passes['Yards'].sum()
+    avg_passing_yards_per_game = total_passing_yards / games_played if games_played and completed_passes.shape[0] > 0 else 'N/A'
+
+    # Compile all the statistics
+    avg_stats = {
+        'Games Played (w/stats available)': games_played,
+        'Average Passing Yards per Game': avg_passing_yards_per_game,
+        'Average Rushing Yards per Game': avg_rushing_yards_per_game,
+        'Average Receiving Yards per Game': avg_receiving_yards_per_game,
+        'Average Rushing TDs per Game': avg_rushing_tds_per_game,
+        'Average Receiving TDs per Game': avg_receiving_tds_per_game,
+        'Average # Flags Pulled per Game': avg_flags_pulled_per_game,
+        'Average Sacks per Game': avg_sacks,
+        'Average # Offensive Plays on Field per Game': avg_offensive_plays,
+        'Average # Defensive Plays on Field per Game': avg_defensive_plays,
+        'Most Common Offensive Position': most_common_offensive_position,
+        'Most Common Defensive Position': most_common_defensive_position
+    }
+
+    return avg_stats
+
+
+
 
 def main():
 
@@ -243,6 +328,35 @@ def main():
         transposed_df['Value'] = transposed_df['Value'].apply(lambda x: round(x, 1) if isinstance(x, float) else x)
 
         st.table(transposed_df)
+    
+    # Exclude 'No specific player', 'NaN', and get unique player names
+    # Dropna removes any 'NaN' values, and unique gets the unique values from the series
+    player_names = data[data['Player Involved'] != 'No specific player']['Player Involved'].dropna().unique()
+    
+    # Sort player names in alphabetical order
+    sorted_player_names = sorted(player_names)
+    
+    # Dropdown to select a player
+    selected_player = st.selectbox('Select a player', sorted_player_names)
+    
+    # Get the average statistics for the selected player
+    player_stats = calculate_average_stats(data, selected_player)
+    
+    # Display the stats
+    st.subheader(f'Season stats for {selected_player}')
+
+    # Display the summary as a table
+    df = pd.DataFrame.from_records([player_stats])
+
+    df.index = range(1, len(df) + 1)
+
+    # Transpose the dataframe and reset its index for display
+    transposed_df = df.head(1).transpose().reset_index()
+    transposed_df.columns = ["Statistic", "Value"]
+
+    transposed_df['Value'] = transposed_df['Value'].apply(lambda x: round(x, 1) if isinstance(x, float) else x)
+
+    st.table(transposed_df)
 
 if __name__ == "__main__":
     main()
