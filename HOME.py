@@ -14,43 +14,26 @@ def format_float(val):
     return val
 
 
-def calculate_average_stats(data, player_name):
-    # Data for actions the player was directly involved in
+def get_player_data(data, player_name):
+    """Retrieve data entries where the player was involved or on the field."""
     player_actions = data[data['Player Involved'] == player_name]
-
-    # Data for plays where the player was on the field
     player_on_field = data[data['Player Positions'].str.contains(player_name, na=False)]
+    return player_actions, player_on_field
 
-    # Separate the data based on 'Offense' or 'Defense'
-    player_on_field_offense = player_on_field[player_on_field['Offense/Defense'] == 'Offense']
-    player_on_field_defense = player_on_field[player_on_field['Offense/Defense'] == 'Defense']
 
-    # Number of games played is the number of unique game weeks the player participated in
-    games_played = player_on_field['Week'].nunique()
+def calculate_statistic(data, filter_conditions, stat_field, aggregation='sum'):
+    """Calculate statistics based on specified conditions."""
+    filtered_data = data[filter_conditions]
+    if aggregation == 'sum':
+        return filtered_data[stat_field].sum()
+    elif aggregation == 'count':
+        return filtered_data.shape[0]
+    else:
+        return None  # or some default value
+    
 
-    # Total and average calculations
-    total_rushing_yards = player_actions[(player_actions['Action'] == 'Run') & (player_actions['Offense/Defense'] == 'Offense')]['Yards'].sum()
-    avg_rushing_yards_per_game = total_rushing_yards / games_played if games_played else 0
-
-    total_receiving_yards = player_actions[(player_actions['Action'] == 'Pass') & (player_actions['Offense/Defense'] == 'Offense')]['Yards'].sum()
-    avg_receiving_yards_per_game = total_receiving_yards / games_played if games_played else 0
-
-    total_rushing_tds = player_actions[(player_actions['Touchdown Type'] == 'Rushing Touchdown') & (player_actions['Offense/Defense'] == 'Offense')].shape[0]
-    avg_rushing_tds_per_game = total_rushing_tds / games_played if games_played else 0
-
-    total_receiving_tds = player_actions[(player_actions['Touchdown Type'] == 'Receiving Touchdown') & (player_actions['Offense/Defense'] == 'Offense')].shape[0]
-    avg_receiving_tds_per_game = total_receiving_tds / games_played if games_played else 0
-
-    sacks = player_actions[(player_actions['Action'] == 'Sack') & (player_actions['Offense/Defense'] == 'Defense')].shape[0]
-    avg_sacks = sacks / games_played if games_played else 0
-
-    flags_pulled = player_actions[(player_actions['Action'] == 'Flag Pull') & (player_actions['Offense/Defense'] == 'Defense')].shape[0] + sacks
-    avg_flags_pulled_per_game = flags_pulled / games_played if games_played else 0
-
-    avg_offensive_plays = player_on_field_offense.shape[0] / games_played if games_played else 0
-    avg_defensive_plays = player_on_field_defense.shape[0] / games_played if games_played else 0
-
-    # Extract positions the player has played
+def extract_positions(player_on_field, player_name):
+    """Extract the positions a player has played during the games."""
     all_positions = []
     for positions in player_on_field['Player Positions']:
         if pd.notnull(positions):
@@ -59,22 +42,103 @@ def calculate_average_stats(data, player_name):
                 name, position = entry.split(' as ')
                 if name.strip() == player_name:
                     all_positions.append(position.strip())
+    return all_positions
 
-    # Offensive and defensive positions
-    offensive_positions_set = set(['Quarterback', 'Wide Receiver', 'Running Back', 'Tight End', 'Center'])
-    defensive_positions_set = set(['Pass Rusher', 'Corner Back', 'Safety'])
 
-    player_offensive_positions = [pos for pos in all_positions if pos in offensive_positions_set]
-    player_defensive_positions = [pos for pos in all_positions if pos in defensive_positions_set]
+def calculate_average_per_game(total, games_played):
+    """Calculate the average value per game."""
+    return total / games_played if games_played else 0
+
+
+def calculate_quarterback_stats(data, player_name):
+    """Calculate passing yards when the player is a quarterback."""
+    qb_plays = data[data['Player Positions'].apply(lambda x: player_name + ' as Quarterback' in x if x is not None else False)]
+    if qb_plays.empty:
+        return 'N/A'  # Return 'N/A' if there are no plays with the player as a quarterback
+
+    completed_passes = qb_plays[(qb_plays['Offense/Defense'] == 'Offense') & (qb_plays['Pass Outcome'] == 'Complete')]
+    total_passing_yards = completed_passes['Yards'].sum()
+
+    return total_passing_yards
+
+def calculate_offensive_defensive_plays(player_on_field):
+    """Calculate the number of offensive and defensive plays."""
+    player_on_field_offense = player_on_field[player_on_field['Offense/Defense'] == 'Offense']
+    player_on_field_defense = player_on_field[player_on_field['Offense/Defense'] == 'Defense']
+
+    offensive_plays = player_on_field_offense.shape[0]
+    defensive_plays = player_on_field_defense.shape[0]
+
+    return offensive_plays, defensive_plays
+
+
+
+def calculate_average_stats(data, player_name):
+    player_actions, player_on_field = get_player_data(data, player_name)
+    
+    games_played = player_on_field['Week'].nunique()
+
+    # Calculate various statistics
+    total_rushing_yards = calculate_statistic(player_actions, 
+                                              (player_actions['Action'] == 'Run') & 
+                                              (player_actions['Offense/Defense'] == 'Offense'), 
+                                              'Yards')
+    avg_rushing_yards_per_game = calculate_average_per_game(total_rushing_yards, games_played)
+
+    total_receiving_yards = calculate_statistic(player_actions, 
+                                                (player_actions['Action'] == 'Pass') & 
+                                                (player_actions['Offense/Defense'] == 'Offense'), 
+                                                'Yards')
+    avg_receiving_yards_per_game = calculate_average_per_game(total_receiving_yards, games_played)
+
+    total_rushing_tds = calculate_statistic(player_actions, 
+                                            (player_actions['Touchdown Type'] == 'Rushing Touchdown') & 
+                                            (player_actions['Offense/Defense'] == 'Offense'), 
+                                            None, 
+                                            aggregation='count')
+    avg_rushing_tds_per_game = calculate_average_per_game(total_rushing_tds, games_played)
+
+    total_receiving_tds = calculate_statistic(player_actions, 
+                                              (player_actions['Touchdown Type'] == 'Passing Touchdown') & 
+                                              (player_actions['Offense/Defense'] == 'Offense'), 
+                                              None, 
+                                              aggregation='count')
+    avg_receiving_tds_per_game = calculate_average_per_game(total_receiving_tds, games_played)
+
+    sacks = calculate_statistic(player_actions, 
+                                (player_actions['Action'] == 'Sack') & 
+                                (player_actions['Offense/Defense'] == 'Defense'), 
+                                None, 
+                                aggregation='count')
+    avg_sacks_per_game = calculate_average_per_game(sacks, games_played)
+
+    flags_pulled = calculate_statistic(player_actions, 
+                                       (player_actions['Action'] == 'Flag Pull') & 
+                                       (player_actions['Offense/Defense'] == 'Defense'), 
+                                       None, 
+                                       aggregation='count') + sacks
+    avg_flags_pulled_per_game = calculate_average_per_game(flags_pulled, games_played)
+
+    # Positions played
+    all_positions = extract_positions(player_on_field, player_name)
+    offensive_positions = ['Quarterback', 'Wide Receiver', 'Running Back', 'Tight End', 'Center']
+    defensive_positions = ['Pass Rusher', 'Corner Back', 'Safety']
+    player_offensive_positions = [pos for pos in all_positions if pos in offensive_positions]
+    player_defensive_positions = [pos for pos in all_positions if pos in defensive_positions]
 
     most_common_offensive_position = Counter(player_offensive_positions).most_common(1)[0][0] if player_offensive_positions else 'N/A'
     most_common_defensive_position = Counter(player_defensive_positions).most_common(1)[0][0] if player_defensive_positions else 'N/A'
 
-    # Calculating average passing yards specifically for when the player is a quarterback
-    qb_plays = data[data['Player Positions'].apply(lambda x: player_name + ' as Quarterback' in x if x is not None else False)]
-    completed_passes = qb_plays[(qb_plays['Offense/Defense'] == 'Offense') & (qb_plays['Pass Outcome'] == 'Complete')]
-    total_passing_yards = completed_passes['Yards'].sum()
-    avg_passing_yards_per_game = total_passing_yards / games_played if games_played and completed_passes.shape[0] > 0 else 'N/A'
+    # Calculate total passing yards for the season when the player is a quarterback
+    total_passing_yards = calculate_quarterback_stats(data, player_name)
+    avg_passing_yards_per_game = 'N/A' if total_passing_yards == 'N/A' else total_passing_yards / games_played
+
+    # Calculate number of offensive and defensive plays
+    offensive_plays, defensive_plays = calculate_offensive_defensive_plays(player_on_field)
+
+    # Calculate averages based on the number of games played
+    avg_offensive_plays = offensive_plays / games_played if games_played else 0
+    avg_defensive_plays = defensive_plays / games_played if games_played else 0
 
     # Compile all the statistics
     avg_stats = {
@@ -85,14 +149,282 @@ def calculate_average_stats(data, player_name):
         'Average Rushing TDs per Game': avg_rushing_tds_per_game,
         'Average Receiving TDs per Game': avg_receiving_tds_per_game,
         'Average # Flags Pulled per Game': avg_flags_pulled_per_game,
-        'Average Sacks per Game': avg_sacks,
+        'Average Sacks per Game': avg_sacks_per_game,
         'Average # Offensive Plays on Field per Game': avg_offensive_plays,
         'Average # Defensive Plays on Field per Game': avg_defensive_plays,
         'Most Common Offensive Position': most_common_offensive_position,
         'Most Common Defensive Position': most_common_defensive_position
     }
 
+    # Add to the statistics dictionary
+    avg_stats['Average # Offensive Plays on Field per Game'] = avg_offensive_plays
+    avg_stats['Average # Defensive Plays on Field per Game'] = avg_defensive_plays
+
+    # Add to the statistics dictionary
+    avg_stats['Average Passing Yards per Game'] = avg_passing_yards_per_game
+
     return avg_stats
+
+
+def calculate_individual_player_stats(data, selected_week, selected_player):
+    # Filter data for the specific player and week
+    week_data = data[data['Week'] == selected_week]
+    player_actions, player_on_field = get_player_data(week_data, selected_player)
+
+    # Calculate various statistics for the specific game
+    total_rushing_yards = calculate_statistic(player_actions, 
+                                              (player_actions['Action'] == 'Run') & 
+                                              (player_actions['Offense/Defense'] == 'Offense'), 
+                                              'Yards')
+    
+    total_receiving_yards = calculate_statistic(player_actions, 
+                                                (player_actions['Action'] == 'Pass') & 
+                                                (player_actions['Offense/Defense'] == 'Offense'), 
+                                                'Yards')
+    
+    total_rushing_tds = calculate_statistic(player_actions, 
+                                            (player_actions['Touchdown Type'] == 'Rushing Touchdown') & 
+                                            (player_actions['Offense/Defense'] == 'Offense'), 
+                                            None, 
+                                            aggregation='count')
+    
+    total_receiving_tds = calculate_statistic(player_actions, 
+                                              (player_actions['Touchdown Type'] == 'Passing Touchdown') & 
+                                              (player_actions['Offense/Defense'] == 'Offense'), 
+                                              None, 
+                                              aggregation='count')
+    
+    sacks = calculate_statistic(player_actions, 
+                                (player_actions['Action'] == 'Sack') & 
+                                (player_actions['Offense/Defense'] == 'Defense'), 
+                                None, 
+                                aggregation='count')
+
+    flags_pulled = calculate_statistic(player_actions, 
+                                       (player_actions['Action'] == 'Flag Pull') & 
+                                       (player_actions['Offense/Defense'] == 'Defense'), 
+                                       None, 
+                                       aggregation='count') + sacks
+
+    # Calculate the success rates
+    offensive_plays = player_on_field[player_on_field['Offense/Defense'] == 'Offense']
+    successful_offense = offensive_plays[offensive_plays['Yards'] > 0].shape[0]
+    pct_successful_offense = (successful_offense / offensive_plays.shape[0]) * 100 if offensive_plays.shape[0] > 0 else 0
+
+    defensive_plays = player_on_field[player_on_field['Offense/Defense'] == 'Defense']
+    successful_defense = defensive_plays[defensive_plays['Yards'] <= 0].shape[0]
+    pct_successful_defense = (successful_defense / defensive_plays.shape[0]) * 100 if defensive_plays.shape[0] > 0 else 0
+
+    # Extract positions played during the game
+    all_positions = extract_positions(player_on_field, selected_player)
+    offensive_positions = ['Quarterback', 'Wide Receiver', 'Running Back', 'Tight End', 'Center']
+    defensive_positions = ['Pass Rusher', 'Corner Back', 'Safety']
+
+    player_offensive_positions = [pos for pos in all_positions if pos in offensive_positions]
+    player_defensive_positions = [pos for pos in all_positions if pos in defensive_positions]
+
+    most_common_offensive_position = Counter(player_offensive_positions).most_common(1)[0][0] if player_offensive_positions else 'N/A'
+    most_common_defensive_position = Counter(player_defensive_positions).most_common(1)[0][0] if player_defensive_positions else 'N/A'
+
+    # Calculate passing yards for the specific game when the player is a quarterback
+    week_data = data[data['Week'] == selected_week]
+    total_passing_yards = calculate_quarterback_stats(week_data, selected_player)
+
+
+
+    # Calculate number of offensive and defensive plays
+    offensive_plays, defensive_plays = calculate_offensive_defensive_plays(player_on_field)
+
+    # Assemble the game-specific statistics
+    game_stats = {
+        'Rushing yards': total_rushing_yards,
+        'Receiving yards': total_receiving_yards,
+        'Rushing TDs': total_rushing_tds,
+        'Receiving TDs': total_receiving_tds,
+        'Sacks': sacks,
+        'Flags pulled': flags_pulled,
+        'Successful offensive plays (%)': pct_successful_offense,
+        'Successful defensive plays (%)': pct_successful_defense,
+        'Most Common Offensive Position': most_common_offensive_position,
+        'Most Common Defensive Position': most_common_defensive_position
+    }
+
+    # Add these to the game-specific statistics dictionary
+    game_stats['Number of offensive plays'] = offensive_plays
+    game_stats['Number of defensive plays'] = defensive_plays
+    # Add to the game-specific statistics dictionary
+    game_stats['Passing yards'] = total_passing_yards
+
+    # Convert the statistics to a DataFrame
+    stats_df = pd.DataFrame([game_stats])
+
+    return stats_df
+
+
+
+
+# def calculate_average_stats(data, player_name):
+#     # Data for actions the player was directly involved in
+#     player_actions = data[data['Player Involved'] == player_name]
+
+#     # Data for plays where the player was on the field
+#     player_on_field = data[data['Player Positions'].str.contains(player_name, na=False)]
+
+#     # Separate the data based on 'Offense' or 'Defense'
+#     player_on_field_offense = player_on_field[player_on_field['Offense/Defense'] == 'Offense']
+#     player_on_field_defense = player_on_field[player_on_field['Offense/Defense'] == 'Defense']
+
+#     # Number of games played is the number of unique game weeks the player participated in
+#     games_played = player_on_field['Week'].nunique()
+
+#     # Total and average calculations
+#     total_rushing_yards = player_actions[(player_actions['Action'] == 'Run') & (player_actions['Offense/Defense'] == 'Offense')]['Yards'].sum()
+#     avg_rushing_yards_per_game = total_rushing_yards / games_played if games_played else 0
+
+#     total_receiving_yards = player_actions[(player_actions['Action'] == 'Pass') & (player_actions['Offense/Defense'] == 'Offense')]['Yards'].sum()
+#     avg_receiving_yards_per_game = total_receiving_yards / games_played if games_played else 0
+
+#     total_rushing_tds = player_actions[(player_actions['Touchdown Type'] == 'Rushing Touchdown') & (player_actions['Offense/Defense'] == 'Offense')].shape[0]
+#     avg_rushing_tds_per_game = total_rushing_tds / games_played if games_played else 0
+
+#     total_receiving_tds = player_actions[(player_actions['Touchdown Type'] == 'Passing Touchdown') & (player_actions['Offense/Defense'] == 'Offense')].shape[0]
+#     avg_receiving_tds_per_game = total_receiving_tds / games_played if games_played else 0
+
+#     sacks = player_actions[(player_actions['Action'] == 'Sack') & (player_actions['Offense/Defense'] == 'Defense')].shape[0]
+#     avg_sacks = sacks / games_played if games_played else 0
+
+#     flags_pulled = player_actions[(player_actions['Action'] == 'Flag Pull') & (player_actions['Offense/Defense'] == 'Defense')].shape[0] + sacks
+#     avg_flags_pulled_per_game = flags_pulled / games_played if games_played else 0
+
+#     avg_offensive_plays = player_on_field_offense.shape[0] / games_played if games_played else 0
+#     avg_defensive_plays = player_on_field_defense.shape[0] / games_played if games_played else 0
+
+#     # Extract positions the player has played
+#     all_positions = []
+#     for positions in player_on_field['Player Positions']:
+#         if pd.notnull(positions):
+#             position_entries = positions.split(', ')
+#             for entry in position_entries:
+#                 name, position = entry.split(' as ')
+#                 if name.strip() == player_name:
+#                     all_positions.append(position.strip())
+
+#     # Offensive and defensive positions
+#     offensive_positions_set = set(['Quarterback', 'Wide Receiver', 'Running Back', 'Tight End', 'Center'])
+#     defensive_positions_set = set(['Pass Rusher', 'Corner Back', 'Safety'])
+
+#     player_offensive_positions = [pos for pos in all_positions if pos in offensive_positions_set]
+#     player_defensive_positions = [pos for pos in all_positions if pos in defensive_positions_set]
+
+#     most_common_offensive_position = Counter(player_offensive_positions).most_common(1)[0][0] if player_offensive_positions else 'N/A'
+#     most_common_defensive_position = Counter(player_defensive_positions).most_common(1)[0][0] if player_defensive_positions else 'N/A'
+
+#     # Calculating average passing yards specifically for when the player is a quarterback
+#     qb_plays = data[data['Player Positions'].apply(lambda x: player_name + ' as Quarterback' in x if x is not None else False)]
+#     completed_passes = qb_plays[(qb_plays['Offense/Defense'] == 'Offense') & (qb_plays['Pass Outcome'] == 'Complete')]
+#     total_passing_yards = completed_passes['Yards'].sum()
+#     avg_passing_yards_per_game = total_passing_yards / games_played if games_played and completed_passes.shape[0] > 0 else 'N/A'
+
+#     # Compile all the statistics
+#     avg_stats = {
+#         'Games Played (w/stats available)': games_played,
+#         'Average Passing Yards per Game': avg_passing_yards_per_game,
+#         'Average Rushing Yards per Game': avg_rushing_yards_per_game,
+#         'Average Receiving Yards per Game': avg_receiving_yards_per_game,
+#         'Average Rushing TDs per Game': avg_rushing_tds_per_game,
+#         'Average Receiving TDs per Game': avg_receiving_tds_per_game,
+#         'Average # Flags Pulled per Game': avg_flags_pulled_per_game,
+#         'Average Sacks per Game': avg_sacks,
+#         'Average # Offensive Plays on Field per Game': avg_offensive_plays,
+#         'Average # Defensive Plays on Field per Game': avg_defensive_plays,
+#         'Most Common Offensive Position': most_common_offensive_position,
+#         'Most Common Defensive Position': most_common_defensive_position
+#     }
+
+#     return avg_stats
+
+# # Function to calculate the statistics for the selected player and week
+# def calculate_individual_player_stats(data, selected_week, selected_player):
+#     # Filter data based on selected week and player
+#     week_data = data[data['Week'] == selected_week]
+#     player_actions = week_data[week_data['Player Involved'] == selected_player]
+#     player_on_field = week_data[week_data['Player Positions'].str.contains(selected_player, na=False)]
+
+#     # Separate the data based on 'Offense' or 'Defense'
+#     player_on_field_offense = player_on_field[player_on_field['Offense/Defense'] == 'Offense']
+#     player_on_field_defense = player_on_field[player_on_field['Offense/Defense'] == 'Defense']
+
+#     offensive_plays = len(player_on_field_offense)
+#     defensive_plays = len(player_on_field_defense)
+
+#     # Total and average calculations
+#     total_rushing_yards = player_actions[(player_actions['Action'] == 'Run') & (player_actions['Offense/Defense'] == 'Offense')]['Yards'].sum()
+
+#     total_receiving_yards = player_actions[(player_actions['Action'] == 'Pass') & (player_actions['Offense/Defense'] == 'Offense')]['Yards'].sum()
+
+#     total_rushing_tds = player_actions[(player_actions['Touchdown Type'] == 'Rushing Touchdown') & (player_actions['Offense/Defense'] == 'Offense')].shape[0]
+
+#     total_receiving_tds = player_actions[(player_actions['Touchdown Type'] == 'Passing Touchdown') & (player_actions['Offense/Defense'] == 'Offense')].shape[0]
+
+#     sacks = player_actions[(player_actions['Action'] == 'Sack') & (player_actions['Offense/Defense'] == 'Defense')].shape[0]
+
+#     flags_pulled = player_actions[(player_actions['Action'] == 'Flag Pull') & (player_actions['Offense/Defense'] == 'Defense')].shape[0] + sacks
+
+#     successful_offense = len(player_on_field[player_on_field['Offense/Defense'] == 'Offense'][player_on_field['Yards'] > 0])
+#     pct_successful_offense = (successful_offense/offensive_plays) * 100 if offensive_plays > 0 else 0
+#     successful_defense = len(player_on_field[player_on_field['Offense/Defense'] == 'Defense'][player_on_field['Yards'] <= 0])
+#     pct_successful_defense = (successful_defense/defensive_plays) * 100 if defensive_plays > 0 else 0
+
+
+#     # Extract positions the player has played
+#     all_positions = []
+#     for positions in player_on_field['Player Positions']:
+#         if pd.notnull(positions):
+#             position_entries = positions.split(', ')
+#             for entry in position_entries:
+#                 name, position = entry.split(' as ')
+#                 if name.strip() == selected_player:
+#                     all_positions.append(position.strip())
+
+#     # Offensive and defensive positions
+#     offensive_positions_set = set(['Quarterback', 'Wide Receiver', 'Running Back', 'Tight End', 'Center'])
+#     defensive_positions_set = set(['Pass Rusher', 'Corner Back', 'Safety'])
+
+#     player_offensive_positions = [pos for pos in all_positions if pos in offensive_positions_set]
+#     player_defensive_positions = [pos for pos in all_positions if pos in defensive_positions_set]
+
+#     most_common_offensive_position = Counter(player_offensive_positions).most_common(1)[0][0] if player_offensive_positions else 'N/A'
+#     most_common_defensive_position = Counter(player_defensive_positions).most_common(1)[0][0] if player_defensive_positions else 'N/A'
+
+    # # Calculating average passing yards specifically for when the player is a quarterback
+    # qb_plays = data[data['Player Positions'].apply(lambda x: selected_player + ' as Quarterback' in x if x is not None else False)]
+    # completed_passes = qb_plays[(qb_plays['Offense/Defense'] == 'Offense') & (qb_plays['Pass Outcome'] == 'Complete')]
+    # total_passing_yards = completed_passes['Yards'].sum() if qb_plays.shape[0] > 0 else 'N/A'
+
+#     receptions = len(player_actions[player_actions['Action'] == 'Pass'])
+#     completions = len(player_actions[player_actions['Pass Outcome'] == 'Complete'])
+    
+#     # Initialize the stats
+#     stats = {
+#         'Passing yards': total_passing_yards,
+#         'Rushing yards': total_rushing_yards,
+#         'Receiving yards': total_receiving_yards,
+#         'Rushing TDs': total_rushing_tds,
+#         'Receiving TDs': total_receiving_tds,
+#         'Complete receptions': completions,
+#         'Attempted Receptions': receptions,
+#         'Reception %': (completions / receptions) * 100 if receptions > 0 else 0,
+#         'Flags pulled': flags_pulled,
+#         'Number of defensive possessions played': len(player_on_field_defense),
+#         '% Successful defensive plays': pct_successful_defense,
+#         'Number of offensive possessions played': len(player_on_field_offense),
+#         '% Successful offensive plays': pct_successful_offense,
+
+#     }
+
+#     stats_df = pd.DataFrame([stats]) 
+    
+#     return stats_df
 
 
 
@@ -335,6 +667,8 @@ def main():
     
     # Sort player names in alphabetical order
     sorted_player_names = sorted(player_names)
+
+    st.subheader("Individual Player Stats")
     
     # Dropdown to select a player
     selected_player = st.selectbox('Select a player', sorted_player_names)
@@ -352,6 +686,30 @@ def main():
 
     # Transpose the dataframe and reset its index for display
     transposed_df = df.head(1).transpose().reset_index()
+    transposed_df.columns = ["Statistic", "Value"]
+
+    transposed_df['Value'] = transposed_df['Value'].apply(lambda x: round(x, 1) if isinstance(x, float) else x)
+
+    st.table(transposed_df)
+
+    st.subheader("Per-game player stats")
+
+    # Dropdown to select the week
+    week = st.selectbox('Select Week', options=data['Week'].unique())
+
+    # Dropdown to select the player
+    selected_player = st.selectbox('Select Player', options=sorted_player_names)
+
+    # Calculate stats for the selected player and week
+    player_stats = calculate_individual_player_stats(data, week, selected_player)
+
+    # Display the stats in the app
+    st.write(f"Stats for {selected_player} in week {week}:")
+
+    player_stats.index = range(1, len(df) + 1)
+
+    # Transpose the dataframe and reset its index for display
+    transposed_df = player_stats.head(1).transpose().reset_index()
     transposed_df.columns = ["Statistic", "Value"]
 
     transposed_df['Value'] = transposed_df['Value'].apply(lambda x: round(x, 1) if isinstance(x, float) else x)
