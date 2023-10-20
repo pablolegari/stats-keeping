@@ -1,6 +1,6 @@
 import pandas as pd
 from collections import Counter
-from setup import *
+from src.setup import *
 
 
 def calculate_season_statistics(data):
