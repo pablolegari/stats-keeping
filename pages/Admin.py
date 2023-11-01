@@ -35,6 +35,8 @@ name, authentication_status, username = authenticator.login('Login', 'main')
 # only if log-in was successful, continue
 if authentication_status:
 
+    st.header("LA Clams Statistics Entry Page")
+
     # Define players and positions
     players = ['Astrid Carbajal', 'Bronwyn Thomas', 'Cassie Maino', 'Desiré Stephens', 'Dominique Benito', 'Emily Horrocks', 'Grace Snyder', 'Jasmine Plows', 'Jude Ladd Greeno', 'Kelsey Fisher', 'Mast Moronta', 'Miranda Sarah Einy', 'Molly Kaplan', 'Nadia Zadeh', 'Sophia Millay', 'Stefanie Visser']
 
