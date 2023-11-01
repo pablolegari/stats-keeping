@@ -18,7 +18,7 @@ def calculate_points(action, conversion_type=None, conversion_outcome=None):
     return points
 
 # get credentials for dashboard
-with open('../src/credentials.yaml') as file:
+with open('./src/credentials.yaml') as file:
     config = yaml.safe_load(file)
 
 authenticator = stauth.Authenticate(
