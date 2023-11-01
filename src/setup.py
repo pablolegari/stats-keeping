@@ -23,7 +23,7 @@ def calculate_statistic(data, filter_conditions, stat_field, aggregation='sum'):
     elif aggregation == 'count':
         return filtered_data.shape[0]
     else:
-        return None  # or some default value
+        return None 
     
 
 def extract_positions(player_on_field, player_name):

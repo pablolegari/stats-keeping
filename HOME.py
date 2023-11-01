@@ -7,7 +7,6 @@ from src.metrics import *
 def load_data():
     return pd.read_csv('team_stats.csv')
 
-
 def main():
     # Page configuration
     st.set_page_config(page_title="LA Clams Stats", page_icon="🏈")
