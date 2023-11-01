@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import streamlit_authenticator as stauth #add abilty to authenticate
 import os
+import yaml
 
 def calculate_points(action, conversion_type=None, conversion_outcome=None):
     points = 0
