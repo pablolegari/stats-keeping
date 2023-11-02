@@ -4,6 +4,8 @@ import streamlit_authenticator as stauth #add abilty to authenticate
 import os
 import yaml
 
+from ..src.setup import players
+
 def calculate_points(action, conversion_type=None, conversion_outcome=None):
     points = 0
     if action in ['Touchdown', 'Pick-Six']:  # Correctly check if the action is one of these types
@@ -36,9 +38,6 @@ name, authentication_status, username = authenticator.login('Login', 'main')
 if authentication_status:
 
     st.header("LA Clams Statistics Entry Page")
-
-    # Define players and positions
-    players = ['Astrid Carbajal', 'Bronwyn Thomas', 'Cassie Maino', 'Desiré Stephens', 'Dominique Benito', 'Emily Horrocks', 'Grace Snyder', 'Jasmine Plows', 'Jude Ladd Greeno', 'Kelsey Fisher', 'Mast Moronta', 'Miranda Sarah Einy', 'Molly Kaplan', 'Nadia Zadeh', 'Sophia Millay', 'Stefanie Visser']
 
     # Check if the stats CSV exists, if not, create an empty one
     if not os.path.exists('team_stats.csv'):

@@ -86,3 +86,6 @@ def display_header():
     # Display the main title of the page
     st.title("LA Clams Statistics")
 
+
+# Define players and positions
+players = ['Astrid Carbajal', 'Bronwyn Thomas', 'Cassie Maino', 'Desiré Stephens', 'Dominique Benito', 'Emily Horrocks', 'Grace Snyder', 'Jasmine Plows', 'Jude Ladd Greeno', 'Kelsey Fisher', 'Mast Moronta', 'Miranda Sarah Einy', 'Molly Kaplan', 'Nadia Zadeh', 'Sophia Millay', 'Stefanie Visser']

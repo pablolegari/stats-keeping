@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from src.setup import players
 from src.metrics import *
 
 # Function to load data
@@ -48,12 +49,8 @@ def main():
 
     #####################################################
     
-    # Exclude 'No specific player', 'NaN', and get unique player names
-    # Dropna removes any 'NaN' values, and unique gets the unique values from the series
-    player_names = data[data['Player Involved'] != 'No specific player']['Player Involved'].dropna().unique()
-    
     # Sort player names in alphabetical order
-    sorted_player_names = sorted(player_names)
+    sorted_player_names = sorted(players)
 
     st.subheader("Individual Player Stats")
     
