@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from src.setup import players
+from src.setup import get_players
 from src.metrics import *
 
 # Function to load data
@@ -50,7 +50,7 @@ def main():
     #####################################################
     
     # Sort player names in alphabetical order
-    sorted_player_names = sorted(players)
+    sorted_player_names = sorted(get_players())
 
     st.subheader("Individual Player Stats")
     

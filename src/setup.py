@@ -87,5 +87,9 @@ def display_header():
     st.title("LA Clams Statistics")
 
 
-# Define players and positions
-players = ['Astrid Carbajal', 'Bronwyn Thomas', 'Cassie Maino', 'Desiré Stephens', 'Dominique Benito', 'Emily Horrocks', 'Grace Snyder', 'Jasmine Plows', 'Jude Ladd Greeno', 'Kelsey Fisher', 'Mast Moronta', 'Miranda Sarah Einy', 'Molly Kaplan', 'Nadia Zadeh', 'Sophia Millay', 'Stefanie Visser']
+@st.cache
+def get_players():
+    # Define players and positions
+    return ['Astrid Carbajal', 'Bronwyn Thomas', 'Cassie Maino', 'Desiré Stephens', 'Dominique Benito', 'Emily Horrocks', 'Grace Snyder', 'Jasmine Plows', 'Jude Ladd Greeno', 'Kelsey Fisher', 'Mast Moronta', 'Miranda Sarah Einy', 'Molly Kaplan', 'Nadia Zadeh', 'Sophia Millay', 'Stefanie Visser']
+
+players = get_players()

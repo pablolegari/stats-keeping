@@ -3,8 +3,7 @@ import pandas as pd
 import streamlit_authenticator as stauth #add abilty to authenticate
 import os
 import yaml
-
-from ..src.setup import players
+from src.setup import get_players
 
 def calculate_points(action, conversion_type=None, conversion_outcome=None):
     points = 0
@@ -89,6 +88,8 @@ if authentication_status:
     half = st.selectbox('Half:', ['1st', '2nd'], key="half_select")
     down = st.number_input('Down (1-4):', min_value=1, max_value=4, value=1, key="down_input")
     yards_to_go = st.number_input('Yards to Go:', min_value=0, value=10, key="yards_to_go_input")
+
+    players = get_players()
 
     # Multi-select for players on the field
     selected_players = st.multiselect('Select players on the field:', players, key="players_field_multiselect")
